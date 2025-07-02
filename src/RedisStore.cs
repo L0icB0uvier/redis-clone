@@ -1,5 +1,7 @@
 namespace codecrafters_redis;
 
+using System.Timers;
+
 public class RedisStore
 {
     private readonly Dictionary<string, string> _storage = new();
@@ -11,6 +13,18 @@ public class RedisStore
         {
             _storage[key] = value;
         }
+    }
+
+    public void Set(string key, string value, int expiryTime)
+    {
+        lock (_lock)
+        {
+            _storage[key] = value;
+        }
+        
+        var timer = new Timer(expiryTime);
+        timer.Elapsed += (sender, args) => Delete(key);
+        timer.Start();
     }
 
     public bool TryGet(string key, out string? value)
