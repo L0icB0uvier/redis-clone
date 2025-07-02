@@ -9,15 +9,20 @@ public class TcpListenerEventLoop
     private readonly TcpListener _listener;
     private readonly List<TcpClient> _clients = new();
     
-    private readonly Dictionary<string, ICommandHandler> _commandHandlers = new()
-    {
-        {"ping", new PingCommand()},
-        {"echo", new EchoCommand()}
-    };
+    private readonly RedisStore _store = new();
+
+    private readonly Dictionary<string, ICommandHandler> _commandHandlers;
 
     public TcpListenerEventLoop(int port)
     {
         _listener = new TcpListener(IPAddress.Any, port);
+        _commandHandlers = new()
+        {
+            {"ping", new PingCommand()},
+            {"echo", new EchoCommand()},
+            {"set", new SetCommand(_store)},
+            {"get", new GetCommand(_store)}
+        };
     }
 
     public async Task RunAsync()
@@ -72,38 +77,45 @@ public class TcpListenerEventLoop
                     var parser = new RespParser(reader);
                     var obj = parser.Parse();
                     
-                    if (obj is not RespArray array)
+                    if (obj is not RespArray respCommandArray)
                     {
                         throw new InvalidDataException(
                             $"Command should be an array object but was: {obj.GetType().Name}");
                     }
+                    
+                    var respCommandName = respCommandArray.Elements[0];
 
-                    if (array.Elements[0] is not RespBulkString cmd)
+                    if (respCommandName is not RespBulkString cmd)
                     {
                         throw new InvalidDataException(
-                            $"Command should have a bulk string as first element but was: {array.Elements[0].GetType().Name}");
+                            $"Command should have a bulk string as first element but was: {respCommandName.GetType().Name}");
                     }
 
                     var commandName = cmd.Value.ToLower();
-
-                    string? commandArg = null;
-                    if (array.Elements.Count > 1)
-                    {
-                        if (array.Elements[1] is not RespBulkString arg)
-                        {
-                            throw new InvalidDataException(
-                                $"Command should have a bulk string as second element but was: {array.Elements[1].GetType().Name}");
-                        }
-
-                        commandArg = arg.Value;
-                    }
                     
                     if (_commandHandlers.ContainsKey(commandName) == false)
                     {
                         throw new InvalidOperationException($"Can't find command: {commandName}");
                     }
+
+                    RespObject[] argumentObjects = respCommandArray.Elements.Skip(1).ToArray();
+                    List<string> commandArg = new();
                     
-                    var responseText = _commandHandlers[commandName.ToLower()].HandleCommand(commandArg);
+                    if (argumentObjects.Length > 0)
+                    {
+                        foreach (var respObject in argumentObjects)
+                        {
+                            if (respObject is not RespBulkString arg)
+                            {
+                                throw new InvalidDataException(
+                                    $"Command should have a bulk string as second element but was: {respCommandArray.Elements[1].GetType().Name}");
+                            }
+                            
+                            commandArg.Add(arg.Value);
+                        }
+                    }
+                    
+                    var responseText = _commandHandlers[commandName.ToLower()].HandleCommand(commandArg.ToArray());
                     Console.WriteLine($"Sending Response: {responseText}");
                     byte[] response = Encoding.UTF8.GetBytes(responseText);
                     await stream.WriteAsync(response, 0, response.Length);
