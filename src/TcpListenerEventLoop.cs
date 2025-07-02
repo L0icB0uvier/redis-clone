@@ -8,6 +8,12 @@ public class TcpListenerEventLoop
 {
     private readonly TcpListener _listener;
     private readonly List<TcpClient> _clients = new();
+    
+    private readonly Dictionary<string, ICommandHandler> _commandHandlers = new()
+    {
+        {"ping", new PingCommand()},
+        {"echo", new EchoCommand()}
+    };
 
     public TcpListenerEventLoop(int port)
     {
@@ -43,6 +49,7 @@ public class TcpListenerEventLoop
                 {
                     byte[] buffer = new byte[1024];
                     int bytesRead = 0;
+                    Console.WriteLine($"Received {bytesRead} bytes from {client.Client.RemoteEndPoint}");
                     try
                     {
                         bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
@@ -60,9 +67,45 @@ public class TcpListenerEventLoop
                     }
                     
                     string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    Console.WriteLine($"Received {bytesRead} bytes from {client.Client.RemoteEndPoint}");
+                    Console.WriteLine(message);
+                    using var reader = new StringReader(message);
+                    var parser = new RespParser(reader);
+                    var obj = parser.Parse();
                     
-                    byte[] response = Encoding.UTF8.GetBytes("+PONG\r\n");
+                    if (obj is not RespArray array)
+                    {
+                        throw new InvalidDataException(
+                            $"Command should be an array object but was: {obj.GetType().Name}");
+                    }
+
+                    if (array.Elements[0] is not RespBulkString cmd)
+                    {
+                        throw new InvalidDataException(
+                            $"Command should have a bulk string as first element but was: {array.Elements[0].GetType().Name}");
+                    }
+
+                    var commandName = cmd.Value.ToLower();
+
+                    string? commandArg = null;
+                    if (array.Elements.Count > 1)
+                    {
+                        if (array.Elements[1] is not RespBulkString arg)
+                        {
+                            throw new InvalidDataException(
+                                $"Command should have a bulk string as second element but was: {array.Elements[1].GetType().Name}");
+                        }
+
+                        commandArg = arg.Value;
+                    }
+                    
+                    if (_commandHandlers.ContainsKey(commandName) == false)
+                    {
+                        throw new InvalidOperationException($"Can't find command: {commandName}");
+                    }
+                    
+                    var responseText = _commandHandlers[commandName.ToLower()].HandleCommand(commandArg);
+                    Console.WriteLine($"Sending Response: {responseText}");
+                    byte[] response = Encoding.UTF8.GetBytes(responseText);
                     await stream.WriteAsync(response, 0, response.Length);
                 }
 
