@@ -22,7 +22,8 @@ public class TcpListenerEventLoop
             {"ping", new PingCommand()},
             {"echo", new EchoCommand()},
             {"set", new SetCommand(_store)},
-            {"get", new GetCommand(_store)}
+            {"get", new GetCommand(_store)},
+            {"info", new InfoCommand()}
         };
     }
 
