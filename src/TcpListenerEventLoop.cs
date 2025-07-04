@@ -16,6 +16,7 @@ public class TcpListenerEventLoop
     public TcpListenerEventLoop(int port)
     {
         _listener = new TcpListener(IPAddress.Any, port);
+        Console.WriteLine($"Listening on port {port}");
         _commandHandlers = new()
         {
             {"ping", new PingCommand()},
