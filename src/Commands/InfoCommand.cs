@@ -2,13 +2,14 @@ namespace codecrafters_redis;
 
 public class InfoCommand : ICommandHandler
 {
+    private readonly RedisServerInfo _serverInfo;
     public string HandleCommand(string[] arguments)
     {
         List<InfoEntry> infoEntries = new();
         
         if (arguments[0] == "replication")
         {
-            InfoEntry roleKey = new InfoEntry("role", "master");
+            InfoEntry roleKey = new InfoEntry("role", _serverInfo.Role);
             infoEntries.Add(roleKey);
         }
 
@@ -17,6 +18,11 @@ public class InfoCommand : ICommandHandler
         var writer = new RespWriter(sw);
         writer.Write(new RespBulkString(infoText));
         return sw.ToString();
+    }
+    
+    public InfoCommand(RedisServerInfo serverInfo)
+    {
+        _serverInfo = serverInfo;
     }
 }
 

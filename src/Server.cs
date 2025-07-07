@@ -1,29 +1,44 @@
 using codecrafters_redis;
 
 Console.WriteLine("Logs from program starts here!");
+Dictionary<string, List<string>> arguments = new(); 
 
-var port = GetCommandPort(args);
-
+Console.WriteLine("Arguments:");
 foreach (var se in args)
 {
     Console.WriteLine(se);
 }
 
-TcpListenerEventLoop server = new TcpListenerEventLoop(port);
+ParseArguments(args);
+
+RedisServerInfo serverInfo = new();
+serverInfo.Role = arguments.ContainsKey("replicaof")? "slave" : "master";
+serverInfo.Port = GetCommandPort();
+
+TcpListenerEventLoop server = new TcpListenerEventLoop(serverInfo);
 await server.RunAsync();
 
-int GetCommandPort(string[] strings)
+void ParseArguments(string[] args)
 {
-    if (strings.Length > 0)
+    string argumentName = "";
+    foreach (var arg in args)
     {
-        for (var i = 0; i < strings.Length; i++)
+        if (arg.StartsWith("--"))
         {
-            if (strings[i] == "--port" && i + 1 < strings.Length)
-            {
-                return int.Parse(strings[i + 1]);
-            }
+            argumentName = arg.Substring(2);
+            arguments.Add(argumentName, new List<string>());
+        }
+        
+        else
+        {
+            arguments[argumentName].Add(arg);
         }
     }
+}
 
-    return 6379;
+int GetCommandPort()
+{
+    if(arguments.ContainsKey("port") == false || arguments["port"].Count == 0) return 6379;
+    
+    return int.Parse(arguments["port"][0]);
 }

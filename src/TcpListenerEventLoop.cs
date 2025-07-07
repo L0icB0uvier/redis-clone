@@ -12,18 +12,20 @@ public class TcpListenerEventLoop
     private readonly RedisStore _store = new();
 
     private readonly Dictionary<string, ICommandHandler> _commandHandlers;
+    private readonly RedisServerInfo _serverInfo;
 
-    public TcpListenerEventLoop(int port)
+    public TcpListenerEventLoop(RedisServerInfo serverInfo)
     {
-        _listener = new TcpListener(IPAddress.Any, port);
-        Console.WriteLine($"Listening on port {port}");
+        _serverInfo = serverInfo;
+        _listener = new TcpListener(IPAddress.Any, _serverInfo.Port);
+        Console.WriteLine($"Listening on port {_serverInfo.Port}");
         _commandHandlers = new()
         {
             {"ping", new PingCommand()},
             {"echo", new EchoCommand()},
             {"set", new SetCommand(_store)},
             {"get", new GetCommand(_store)},
-            {"info", new InfoCommand()}
+            {"info", new InfoCommand(_serverInfo)}
         };
     }
 
